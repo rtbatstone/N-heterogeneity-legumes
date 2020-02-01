@@ -16,25 +16,9 @@ knitr::opts_chunk$set(warning=FALSE, message=FALSE)
 ```{r packages}
 library("tidyverse") ## includes ggplot2, dplyr, readr, stringr
 library("reshape2") ## for melting datasheets
-library("car") ## Anova function
 library("cowplot") # paneled graphs
-library("lme4") ## mixed effects models
 library("knitr") ## knit analyses files
-library("multcomp") ## post-hoc comps
-library("multcompView") ## summarize key variables
-library("fitdistrplus") ## determine best prob distributions
-library("logspline") ## visualize prob dists
-library("DHARMa") ## residual diagnostics for GLMMs
-library("RVAideMemoire") ## residual diagnotics
-library("emmeans") ## post-hoc contrasts, lsmeans
-library("lattice") ## graphs
-
-#model convergence packages
-library("numDeriv")
-# library("RCurl") ## to source() from Github
 library("RColorBrewer") ## graph colors
-
-source("./overdisp.R")
 ```
 
 ## load data

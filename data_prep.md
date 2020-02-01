@@ -35,7 +35,8 @@ library("RColorBrewer") ## graph colors
 ## load spreadsheet (plant\_info.csv)
 
   - compiled by Xue
-  - columns 15 onward from nod-level data (Judith)
+  - columns 15 onward from nod-level data
+    (./raw\_data/nod\_occ\_Ndist.csv)
       - summarized using pivot table for plant\_ID
       - total count of plates with 1022 and 1021 on each root half
       - didn’t include any unsuccessfully scored or mixed plates

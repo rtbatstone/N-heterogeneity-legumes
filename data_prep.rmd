@@ -8,7 +8,7 @@ editor_options:
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(warning=FALSE)
+knitr::opts_chunk$set(warning=FALSE, message=FALSE)
 ```
 
 ## load packages
@@ -40,7 +40,7 @@ library("RColorBrewer") ## graph colors
 
 ## load spreadsheet (plant_info.csv)
 - compiled by Xue
-- columns 15 onward from nod-level data (Judith)
+- columns 15 onward from nod-level data (./raw_data/nod_occ_Ndist.csv)
   - summarized using pivot table for plant_ID
   - total count of plates with 1022 and 1021 on each root half
   - didn't include any unsuccessfully scored or mixed plates (1021/1022)

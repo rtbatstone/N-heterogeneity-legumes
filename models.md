@@ -3,28 +3,6 @@ Whole root, half root, and strain models
 Rebecca Batstone
 2020-02-01
 
-## Set contrasts
-
-<https://rstudio-pubs-static.s3.amazonaws.com/65059_586f394d8eb84f84b1baaf56ffb6b47f.html>
-
-“By default, R uses traditional dummy coding (called “treatment
-contrasts” in R) for any non-ordered factors, and polynomial trend
-contrasts for any ordered factors. That works out well if you intend to
-look at regression coefficients"
-
-“Note that traditional dummy coding is fine for regression coefficients,
-but since traditional dummy codes aren’t orthogonal, it messes things up
-when you’re just trying to partition variance (i.e. an ANOVA).”
-
-“For an ANOVA, you should set your factors to use effects coding, rather
-than relying on the default treatment codes. You can do that with the
-contr.sum() function”
-
-``` r
-# set effects contrasts (treat is an ordered factor w/ 4 levels, half with 2-lvls)
-options(contrasts = c("contr.sum","contr.poly")) 
-```
-
 ## load packages
 
 ``` r
@@ -57,6 +35,28 @@ source("./overdisp.R")
 load("./prepped_data/plants.Rdata")
 load("./prepped_data/plants_long.Rdata")
 load("./prepped_data/plants_long_strain.Rdata")
+```
+
+## Set contrasts
+
+<https://rstudio-pubs-static.s3.amazonaws.com/65059_586f394d8eb84f84b1baaf56ffb6b47f.html>
+
+“By default, R uses traditional dummy coding (called “treatment
+contrasts” in R) for any non-ordered factors, and polynomial trend
+contrasts for any ordered factors. That works out well if you intend to
+look at regression coefficients"
+
+“Note that traditional dummy coding is fine for regression coefficients,
+but since traditional dummy codes aren’t orthogonal, it messes things up
+when you’re just trying to partition variance (i.e. an ANOVA).”
+
+“For an ANOVA, you should set your factors to use effects coding, rather
+than relying on the default treatment codes. You can do that with the
+contr.sum() function”
+
+``` r
+# set effects contrasts (treat is an ordered factor w/ 4 levels, half with 2-lvls)
+options(contrasts = c("contr.sum","contr.poly")) 
 ```
 
 ## Model 1: root growth in reponse to N-heterogeneity
@@ -110,19 +110,19 @@ plot(fit.exp)
 ![](models_files/figure-gfm/m1_root_growth-4.png)<!-- -->
 
 ``` r
-fit.gamma$aic ## 4385.716
+fit.gamma$aic 
 ```
 
     ## [1] 4385.716
 
 ``` r
-fit.exp$aic ## 4393.56
+fit.exp$aic
 ```
 
     ## [1] 4393.56
 
 ``` r
-# Gamma, exp (best to worst)
+## Gamma, exp (best to worst)
 
 # model for half
 m1 <- glmer(root ~ (nod + line) * (treat/half) +
@@ -291,6 +291,7 @@ require(multcompView)
 # treat:half interaction
 HT_root.lsm <- emmeans(m1, ~ half | treat)
 sum.HT_root.lsm <- summary(HT_root.lsm, type="response", infer= c(TRUE,TRUE), adjust = "bon")
+save(sum.HT_root.lsm, file = "./models_files/sum.HT_root.lsm.Rdata")
 (cld_HT_root.lsm <- cld(regrid(HT_root.lsm)))
 ```
 
@@ -339,6 +340,7 @@ plot(treat_con)
 # line:treat:half
 LHT_root.lsm <- emmeans(m1, ~ half | treat + line)
 sum.LHT_root.lsm <- summary(LHT_root.lsm, type="response", infer= c(TRUE,TRUE), adjust = "bon")
+save(sum.LHT_root.lsm, file = "./models_files/sum.LHT_root.lsm.Rdata")
 
 # Dunnett-style contrasts (compare to control)
 treat_con <- contrast(regrid(LHT_root.lsm), method = "trt.vs.ctrl1")
@@ -602,6 +604,7 @@ require(multcompView)
 # treat:half interaction
 HT_nod.lsm <- emmeans(m2, ~ half | treat)
 sum.HT_nod.lsm <- summary(HT_nod.lsm, type="response", infer= c(TRUE,TRUE), adjust = "bon")
+save(sum.HT_nod.lsm, file = "./models_files/sum.HT_nod.lsm.Rdata")
 (cld_HT_nod.lsm <- cld(regrid(HT_nod.lsm)))
 ```
 
@@ -679,6 +682,7 @@ plot(treat_con)
 # line:treat:half
 LHT_nod.lsm <- emmeans(m2, ~ half | treat + line)
 sum.LHT_nod.lsm <- summary(LHT_nod.lsm, type="response", infer= c(TRUE,TRUE), adjust = "bon")
+save(sum.LHT_nod.lsm, file = "./models_files/sum.LHT_nod.lsm.Rdata")
 
 # Dunnett-style contrasts (compare to control)
 treat_con <- contrast(regrid(LHT_nod.lsm), method = "trt.vs.ctrl1")
@@ -939,6 +943,7 @@ require(multcompView)
 # treat:half interaction
 SHT_nod.lsm <- emmeans(m3, ~ half | treat + strain)
 sum.SHT_nod.lsm <- summary(SHT_nod.lsm, type="response", infer= c(TRUE,TRUE), adjust = "bon")
+save(sum.SHT_nod.lsm, file = "./models_files/sum.SHT_nod.lsm.Rdata")
 (cld_SHT_nod.lsm <- cld(regrid(SHT_nod.lsm)))
 ```
 
@@ -1092,11 +1097,11 @@ summary(glht(mS1a, mcp(line="Tukey"))) # post-hoc comparisons
     ## 267 - 270 == 0  0.086700   0.008650  10.023  < 0.001 ***
     ## 313 - 270 == 0  0.109165   0.008678  12.580  < 0.001 ***
     ## 279 - 270 == 0  0.107844   0.009666  11.157  < 0.001 ***
-    ## 267 - 276 == 0  0.035103   0.009582   3.664  0.00226 ** 
+    ## 267 - 276 == 0  0.035103   0.009582   3.664  0.00227 ** 
     ## 313 - 276 == 0  0.057568   0.009676   5.949  < 0.001 ***
     ## 279 - 276 == 0  0.056247   0.010449   5.383  < 0.001 ***
-    ## 313 - 267 == 0  0.022464   0.009976   2.252  0.15878    
-    ## 279 - 267 == 0  0.021143   0.010797   1.958  0.28376    
+    ## 313 - 267 == 0  0.022464   0.009976   2.252  0.15848    
+    ## 279 - 267 == 0  0.021143   0.010797   1.958  0.28357    
     ## 279 - 313 == 0 -0.001321   0.010839  -0.122  0.99995    
     ## ---
     ## Signif. codes:  0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1

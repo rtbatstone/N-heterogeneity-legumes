@@ -1,0 +1,312 @@
+---
+title: "Re-analysis of Batstone et al. 2017 (five lines)"
+author: "Rebecca Batstone"
+date: "`r format(Sys.Date())`"
+output: github_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(warning=FALSE, message=FALSE)
+```
+
+## load packages
+
+```{r packages}
+library("tidyverse") ## includes ggplot2, dplyr, readr, stringr
+library("cowplot") ## paneled graphs
+library("ggrepel") # geom_text_repel function
+library("reshape2") ## for melting datasheets
+library("car") ## Anova function
+library("lme4") ## mixed effects models
+library("multcomp") ## post-hoc comps
+library("multcompView") ## summarize key variables
+library("RVAideMemoire") ## residual diagnotics
+```
+
+## load data
+
+```{r raw_data}
+SR_rhiz <- read_csv("./reanalyses_files/splitroot_reanalysis_rhizobia.csv", 
+    col_types = cols(line = col_factor(levels = c("270", 
+        "276", "267", "313", "279"))))
+
+SR_fert <- read_csv("./reanalyses_files/splitroot_reanalysis_fertilizer.csv", 
+    col_types = cols(line = col_factor(levels = c("270", 
+        "276", "267", "313", "279"))))
+```
+
+## Set contrasts
+
+```{r contrasts}
+# set effects contrasts (treat is an ordered factor w/ 4 levels, half with 2-lvls)
+options(contrasts = c("contr.sum","contr.poly")) 
+```
+
+## Prep spreadsheets for analyses:
+
+```{r sub_SR}
+# create long version of rhiz
+SR_rhiz_long1 <- SR_rhiz %>%
+  gather(key = "treat", value = "root",
+       Em1022.root, Em1021.root)
+
+SR_rhiz_long2 <- SR_rhiz %>%
+  gather(key = "treat", value = "nod",
+       Em1022.nod, Em1021.nod)
+
+SR_rhiz_long <- cbind(SR_rhiz_long1, SR_rhiz_long2[,23])
+
+SR_rhiz_long <- SR_rhiz_long %>% mutate(treat=recode_factor(treat, 
+                         Em1022.root="Em1022",
+                         Em1021.root="Em1021"))
+
+SR_rhiz_long$treat <- factor(SR_rhiz_long$treat, 
+                             levels = c("Em1021", "Em1022"))
+SR_rhiz_long$plant <- as.factor(SR_rhiz_long$plant)
+# str(SR_rhiz_long)
+## 54 obs., 27 plants
+
+# create long version of fert
+SR_fert_long <- SR_fert %>%
+  gather(key = "treat", value = "root",
+       high_BM, low_BM)
+
+SR_fert_long <- SR_fert_long %>% mutate(treat=recode_factor(treat, 
+                         high_BM="High-N",
+                         low_BM="Low-N"))
+
+SR_fert_long$treat <- factor(SR_fert_long$treat,
+                             levels = c("Low-N", "High-N"))
+SR_fert_long$plant <- as.factor(SR_fert_long$plant)
+# str(SR_fert_long)
+## 82 obs., 41 plants
+```
+
+## Models
+
+```{r models}
+
+## Rhizobia exp:
+
+# model of shoot differences btw lines
+glmm1_rhiz <- glmer(shoot ~ line + (1|tray),
+                         family=Gamma(link="sqrt"), data = SR_rhiz)
+
+plotresid(glmm1_rhiz, shapiro = TRUE)
+summary(glmm1_rhiz)
+Anova(glmm1_rhiz, type=2)
+summary(glht(glmm1_rhiz, mcp(line="Tukey")))
+
+# model of root differences btw lines and treat
+glmm2_rhiz <- glmer(root ~ line*treat + (1|tray) + (1|plant),
+                         family=Gamma(link="sqrt"), data = SR_rhiz_long)
+plotresid(glmm2_rhiz, shapiro = TRUE)
+summary(glmm2_rhiz)
+Anova(glmm2_rhiz, type=3)
+
+# model of root differences btw lines and treat
+glmm3_rhiz <- glmer(nod ~ line*treat + (1|tray) + (1|plant),
+                         family=poisson(link="sqrt"), data = SR_rhiz_long)
+# model failed to converge
+plotresid(glmm3_rhiz, shapiro = TRUE) # slight pattern, normal
+summary(glmm3_rhiz)
+Anova(glmm3_rhiz, type=3)
+
+## Fertilizer exp:
+# model of shoot differences btw lines
+glmm1_fert <- glmer(shoot ~ line + (1|tray),
+                         family=Gamma(link="sqrt"), data = SR_fert)
+
+plotresid(glmm1_fert, shapiro = TRUE)
+summary(glmm1_fert)
+Anova(glmm1_fert, type=2)
+summary(glht(glmm1_fert, mcp(line="Tukey")))
+
+# model of root differences btw lines and treat
+glmm2_fert <- glmer(root ~ line*treat + (1|tray) + (1|plant),
+                         family=Gamma(link="sqrt"), data = SR_fert_long)
+plotresid(glmm2_fert, shapiro = TRUE) 
+summary(glmm2_fert)
+Anova(glmm2_fert, type=3)
+```
+
+## Summarize data
+
+```{r summarize}
+## Rhizobia exp:
+
+# convert shoot bm to mg
+SR_rhiz$shoot.t <- SR_rhiz$shoot*1000
+
+# summarize shoot for lines
+SR_rhiz_sum_shoot <- SR_rhiz %>%
+  group_by(line) %>%
+  summarise(mean_shoot = mean(shoot.t, na.rm = TRUE), 
+            SE_shoot = sd(shoot.t, na.rm = TRUE)/sqrt(length(shoot.t)))
+
+# summarize root and nodules
+# convert root bm to mg
+SR_rhiz_long$root.t <- SR_rhiz_long$root*1000
+
+# summarize root for lines and treat
+SR_rhiz_long_sum <- SR_rhiz_long %>%
+  group_by(line, treat) %>%
+  summarise(mean_root = mean(root.t, na.rm = TRUE), 
+            SE_root = sd(root.t, na.rm = TRUE)/sqrt(length(root.t)),
+            mean_nod = mean(nod, na.rm = TRUE), 
+            SE_nod = sd(nod, na.rm = TRUE)/sqrt(length(nod))
+            )
+
+## Fertilizer exp:
+
+# convert shoot bm to mg
+SR_fert$shoot.t <- SR_fert$shoot*1000
+
+# summarize shoot for lines
+SR_fert_sum_shoot <- SR_fert %>%
+  group_by(line) %>%
+  summarise(mean_shoot = mean(shoot.t, na.rm = TRUE), 
+            SE_shoot = sd(shoot.t, na.rm = TRUE)/sqrt(length(shoot.t)))
+
+# convert root bm to mg
+SR_fert_long$root.t <- SR_fert_long$root*1000
+
+# summarize root for lines and treat
+SR_fert_long_sum <- SR_fert_long %>%
+  group_by(line, treat) %>%
+  summarise(mean_root = mean(root.t, na.rm = TRUE), 
+            SE_root = sd(root.t, na.rm = TRUE)/sqrt(length(root.t)),
+            )
+```
+
+## Plot figures
+
+```{r plots}
+# plots for lines of interest
+require(ggrepel)
+
+# Figure S1 for paper:
+# Fertilizer experiment:
+(plot_fert_shoot <- ggplot(SR_fert_sum_shoot, 
+                                      aes(x=line, y = mean_shoot, colour=line)) + 
+   geom_point(size=5,colour="black") + 
+   geom_errorbar(aes(ymin = mean_shoot-SE_shoot, 
+                     ymax=mean_shoot+SE_shoot), 
+                 width=0.1, colour="black") +
+   ylab(NULL) + 
+   xlab(NULL) + 
+   theme_bw() +
+   scale_size(guide=FALSE) +
+   scale_colour_discrete(name="Plant line") +
+   theme(panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        legend.title = element_text(colour="black", size=16, face="bold"),
+        legend.text = element_text(colour="black", size=12),
+        legend.position = "none",
+        axis.text.y = element_text(size=18),
+        axis.title.x = element_blank(),
+        axis.text.x = element_blank(),
+        axis.title.y = element_text(size=20)
+        )
+  )
+
+(plot_fert_root <- ggplot(SR_fert_long_sum,
+                          aes(x=treat, y = mean_root, group=line, colour=line, shape=treat)) + 
+   geom_point(size=5, position = position_dodge(0.1), colour="black") + 
+   geom_line(position = position_dodge(0.1), colour="black") +
+   geom_errorbar(aes(ymin = mean_root-SE_root, ymax=mean_root+SE_root), width=0.1,
+                 position = position_dodge(0.1), colour="black") +
+   geom_text_repel(data = subset(SR_fert_long_sum, treat == "High-N"),
+             aes(label=line), nudge_x = 0.2, segment.color = 'transparent', colour="black") + 
+   ylab("Root biomass (mg)") + 
+   xlab(NULL) + 
+   theme_bw() +
+   scale_x_discrete(breaks=c("Low-N","High-N"),
+        labels=c("20%-N", "80%-N")) +  
+   scale_size(guide=FALSE) +
+   scale_shape_manual(values=c(1,19)) +
+   theme(panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        legend.title = element_text(colour="black", size=16, face="bold"),
+        legend.text = element_text(colour="black", size=12),
+        legend.position = "none",
+        axis.text.y = element_text(size=18),
+        axis.text.x = element_text(size=18),
+        axis.title.x = element_blank(), 
+        axis.title.y = element_text(size=20)
+        )
+  )
+
+# rhizobia experiment
+(plot_rhiz_shoot <- ggplot(SR_rhiz_sum_shoot, 
+                                      aes(x=line, y = mean_shoot, colour=line)) + 
+   geom_point(size=5, colour="black") + 
+   geom_errorbar(aes(ymin = mean_shoot-SE_shoot, ymax=mean_shoot+SE_shoot), 
+                 width=0.1, colour="black") +
+   ylab(NULL) + 
+   xlab("Plant line") + 
+   theme_bw() +
+   scale_size(guide=FALSE) +
+   scale_colour_discrete(name="Plant line") +
+   theme(panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        legend.title = element_text(colour="black", size=16, face="bold"),
+        legend.text = element_text(colour="black", size=12),
+        legend.position = "none",
+        axis.text.y = element_text(size=18),
+        axis.text.x = element_text(size=18),
+        axis.title.x = element_text(size=20),
+        axis.title.y = element_text(size=20)
+        )
+  )
+
+(plot_rhiz_nod <- ggplot(SR_rhiz_long_sum, aes(x=treat, y = mean_nod, 
+                                                  group=line, colour=line, shape=treat)) + 
+   geom_point(size=5, position = position_dodge(0.1), colour = "black") + 
+   geom_line(position = position_dodge(0.1), colour = "black") +
+   geom_errorbar(aes(ymin = mean_nod-SE_nod, ymax=mean_nod+SE_nod), width=0.1,
+                 position = position_dodge(0.1), colour = "black") +
+   geom_text_repel(data = subset(SR_rhiz_long_sum, treat == "Em1022"),
+             aes(label=line), nudge_x = 0.2, segment.color = 'transparent', colour = "black") + 
+   ylab("Nodules (no.)") + 
+   xlab("Treatment") + 
+   theme_bw() +
+   scale_x_discrete(breaks=c("Em1021","Em1022"),
+        labels=c("Em1021-\n inoculated", "Em1022-\n inoculated")) +
+   scale_size(guide=FALSE) +
+   scale_shape_manual(values=c(1,19)) +  
+   scale_colour_discrete(name="Plant line") +
+   theme(panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        legend.title = element_text(colour="black", size=16, face="bold"),
+        legend.text = element_text(colour="black", size=12),
+        legend.position = "none",
+        axis.text.y = element_text(size=18),
+        axis.text.x = element_text(size=18),
+        axis.title.x = element_text(size=20),
+        axis.title.y = element_text(size=20)
+        )
+  )
+
+figS2_base <- plot_grid(plot_fert_shoot, plot_fert_root,
+                         plot_rhiz_shoot, plot_rhiz_nod,
+          align = "hv",
+          ncol = 2, nrow = 2,
+          labels = "AUTO")
+
+# add on the shared y axis title
+figS2_y_axis <- ggdraw() + draw_label("Shoot biomass (mg)", size = 24, angle=90)
+
+# put them together
+figS2 <- plot_grid(figS2_y_axis, figS2_base, ncol=2, rel_widths=c(0.04, 1)) 
+# rel_heights or widths values control text margins
+
+save_plot("./figures_files/FigS1_reanalysis.pdf", figS2,
+          ncol = 2, # we're saving a grid plot of 3 columns
+          nrow = 2, # and 2 rows
+          # each individual subplot should have an aspect ratio of 1.3
+          base_aspect_ratio = 1.3
+          )
+```
