@@ -1,0 +1,349 @@
+---
+title: "Whole root, half root, and strain models"
+author: "Rebecca Batstone"
+date: "`r format(Sys.Date())`"
+output: github_document
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(warning=FALSE, message=FALSE)
+```
+
+## load packages
+
+```{r packages}
+library("tidyverse") ## includes ggplot2, dplyr, readr, stringr
+library("reshape2") ## for melting datasheets
+library("car") ## Anova function
+library("cowplot") # paneled graphs
+library("lme4") ## mixed effects models
+library("knitr") ## knit analyses files
+library("multcomp") ## post-hoc comps
+library("multcompView") ## summarize key variables
+library("fitdistrplus") ## determine best prob distributions
+library("logspline") ## visualize prob dists
+library("DHARMa") ## residual diagnostics for GLMMs
+library("RVAideMemoire") ## residual diagnotics
+library("emmeans") ## post-hoc contrasts, lsmeans
+library("lattice") ## graphs
+
+#model convergence packages
+library("numDeriv")
+# library("RCurl") ## to source() from Github
+library("RColorBrewer") ## graph colors
+
+source("./overdisp.R")
+```
+
+## load data
+
+```{r load_data}
+load("./prepped_data/plants.Rdata")
+load("./prepped_data/plants_long.Rdata")
+load("./prepped_data/plants_long_strain.Rdata")
+```
+
+## Set contrasts
+
+https://rstudio-pubs-static.s3.amazonaws.com/65059_586f394d8eb84f84b1baaf56ffb6b47f.html
+
+"By default, R uses traditional dummy coding (called “treatment contrasts” in R) for any non-ordered factors, and polynomial trend contrasts for any ordered factors. That works out well if you intend to look at regression coefficients"
+
+"Note that traditional dummy coding is fine for regression coefficients, but since traditional dummy codes aren’t orthogonal, it messes things up when you’re just trying to partition variance (i.e. an ANOVA)."
+
+"For an ANOVA, you should set your factors to use effects coding, rather than relying on the default treatment codes. You can do that with the contr.sum() function"
+
+```{r contrasts}
+# set effects contrasts (treat is an ordered factor w/ 4 levels, half with 2-lvls)
+options(contrasts = c("contr.sum","contr.poly")) 
+```
+
+## Model 1: root growth in reponse to N-heterogeneity
+
+```{r m1_root_growth}
+plants_long.root <- plants_long[complete.cases(plants_long[ , c("root","nod"),]),]
+plants_long.root <- droplevels(plants_long.root)
+# str(plants_long.root)
+## 638 obs.
+
+# determine best probability distribution for data
+ggplot(plants_long.root, aes(x = root.t)) + geom_density() + facet_grid(treat~half)
+## right-skewed
+
+require(fitdistrplus)
+require(logspline)
+
+descdist(plants_long.root$root, discrete = FALSE)
+## exponential, beta, gamma
+fit.gamma <- fitdist(plants_long.root$root.t, "gamma")
+# fit.beta <- fitdist(plants_long.root$root.t, "beta") # has to be 0-1
+fit.exp <- fitdist(plants_long.root$root.t, "exp")
+plot(fit.gamma)
+plot(fit.exp)
+fit.gamma$aic 
+fit.exp$aic
+## Gamma, exp (best to worst)
+
+# model for half
+m1 <- glmer(root ~ (nod + line) * (treat/half) +
+               (1|batch/tray/plant), 
+               family = Gamma(link = "sqrt"),
+               data = plants_long.root,
+               control=glmerControl(optimizer="nloptwrap",
+                            optCtrl=list(maxfun=2e4)))
+summary(m1)
+Anova(m1, type=3)
+
+# check diagonstics
+require(DHARMa)
+
+# residual diagnostics using DHARMa
+## Step 1: scaled residuals
+simOut_m1 <- simulateResiduals(fittedModel = m1, n = 1000)
+plot(simOut_m1) 
+testUniformity(simOut_m1)
+testDispersion(simOut_m1) 
+
+# plot scaled residuals over each predictor (make sure their are even)
+plotResiduals(plants_long.root$nod,  simOut_m1$scaledResiduals)
+
+# lsmeans
+require(emmeans)
+require(lattice)
+require(multcomp)
+require(multcompView)
+
+# treat:half interaction
+HT_root.lsm <- emmeans(m1, ~ half | treat)
+sum.HT_root.lsm <- summary(HT_root.lsm, type="response", infer= c(TRUE,TRUE), adjust = "bon")
+save(sum.HT_root.lsm, file = "./models_files/sum.HT_root.lsm.Rdata")
+(cld_HT_root.lsm <- cld(regrid(HT_root.lsm)))
+# sig. diff at 20:80 and 2:98
+plot(cld_HT_root.lsm)
+
+# Dunnett-style contrasts (compare to control)
+treat_con <- contrast(regrid(HT_root.lsm), method = "trt.vs.ctrl1")
+con.HT_root.lsm <- summary(treat_con)
+plot(treat_con)
+
+# line:treat:half
+LHT_root.lsm <- emmeans(m1, ~ half | treat + line)
+sum.LHT_root.lsm <- summary(LHT_root.lsm, type="response", infer= c(TRUE,TRUE), adjust = "bon")
+save(sum.LHT_root.lsm, file = "./models_files/sum.LHT_root.lsm.Rdata")
+
+# Dunnett-style contrasts (compare to control)
+treat_con <- contrast(regrid(LHT_root.lsm), method = "trt.vs.ctrl1")
+con.LHT_root.lsm <- summary(treat_con, type="response")
+
+lsmip(m1, half ~ treat, ylab = "Observed root biomass (mg)")
+lsmip(m1, half ~ treat | line, ylab = "Observed root biomass (mg)")
+```
+
+## Model 2: nodulation in reponse to N-heterogeneity
+
+Note: leave in any lower order terms, significant or not, for any higher order terms in the model. That means you have to leave in all non-significant two-way interactions for any significant 3-ways.
+
+```{r m2_nodulation}
+plants_long.nod <- plants_long[complete.cases(plants_long[ , c("nod","root"),]),]
+plants_long.nod <- droplevels(plants_long.nod)
+# str(plants_long.nod)
+## 638 obs., 337 plants
+
+## determine best probability distribution for data
+ggplot(plants_long.nod, aes(x = nod)) + geom_density() + facet_grid(treat~half)
+# right-skewed
+
+require(fitdistrplus)
+require(logspline)
+
+descdist(plants_long.nod$nod, discrete = TRUE)
+# negative bin, poisson, normal
+fit.poiss <- fitdist(plants_long.nod$nod, "pois")
+fit.norm <- fitdist(plants_long.nod$nod, "norm")
+fit.nbinom <- fitdist(plants_long.nod$nod, "nbinom")
+plot(fit.norm)
+plot(fit.nbinom)
+plot(fit.poiss)
+fit.poiss$aic #5199.737
+fit.norm$aic #4049.737
+fit.nbinom$aic #3572.256
+# nbin, normal, pois (best to worst)
+
+# observation-level effect
+plants_long.nod$obs_effect <- 1:nrow(plants_long.nod) # account for overdispersion
+
+# model for AON
+m2 <- glmer(nod ~ (root + line) * (treat/half) + 
+               (1|batch/tray/plant) +
+               (1|obs_effect), 
+               family = poisson(link="sqrt"),
+               data = plants_long.nod,
+               control=glmerControl(optimizer="nloptwrap",
+                            optCtrl=list(maxfun=2e4)))
+summary(m2)
+Anova(m2, type=3)
+
+# residual dianostics using DHARMa
+## Step 1: scaled residuals
+simOut_m2 <- simulateResiduals(fittedModel = m2, n = 1000)
+plot(simOut_m2)
+testUniformity(simOut_m2)
+testDispersion(simOut_m2)
+
+# plot scaled residuals over each predictor (make sure their are even)
+plotResiduals(plants_long.nod$leaf,  simOut_m2$scaledResiduals)
+
+# lsmeans
+require(emmeans)
+require(lattice)
+require(multcompView)
+
+# treat:half interaction
+HT_nod.lsm <- emmeans(m2, ~ half | treat)
+sum.HT_nod.lsm <- summary(HT_nod.lsm, type="response", infer= c(TRUE,TRUE), adjust = "bon")
+save(sum.HT_nod.lsm, file = "./models_files/sum.HT_nod.lsm.Rdata")
+(cld_HT_nod.lsm <- cld(regrid(HT_nod.lsm)))
+cld_HT_nod.lsm
+# sig. diff at all but control
+plot(cld_HT_nod.lsm)
+
+# Dunnett-style contrasts (compare to control)
+treat_con <- contrast(regrid(HT_nod.lsm), method = "trt.vs.ctrl1")
+con.HT_nod.lsm <- summary(treat_con)
+plot(treat_con)
+
+# line:treat:half
+LHT_nod.lsm <- emmeans(m2, ~ half | treat + line)
+sum.LHT_nod.lsm <- summary(LHT_nod.lsm, type="response", infer= c(TRUE,TRUE), adjust = "bon")
+save(sum.LHT_nod.lsm, file = "./models_files/sum.LHT_nod.lsm.Rdata")
+
+# Dunnett-style contrasts (compare to control)
+treat_con <- contrast(regrid(LHT_nod.lsm), method = "trt.vs.ctrl1")
+con.LHT_nod.lsm <- summary(treat_con, type="response")
+
+lsmip(m2, half ~ treat, ylab = "Observed nod biomass (mg)")
+lsmip(m2, half ~ treat | line, ylab = "Observed nod biomass (mg)")
+```
+
+## Model 3: partner choice
+
+```{r m3_partner_choice}
+plants_long_strain.nod <- plants_long_strain[complete.cases(plants_long_strain[ ,
+                                                    c("nod","root"),]),]
+plants_long_strain.nod <- droplevels(plants_long_strain.nod)
+# str(plants_long_strain.nod)
+## 844 obs., 295 plants
+
+# observation-level effect
+plants_long_strain.nod$obs_effect <- 1:nrow(plants_long_strain.nod) # account for overdispersion
+
+# model
+m3 <- glmer(nod ~ (root + line) * (treat/half) * strain + 
+               (1|batch/tray/plant) +
+               (1|obs_effect), 
+               family = poisson(link = "sqrt"),
+               data = plants_long_strain.nod,
+               control=glmerControl(optimizer="nloptwrap",
+                            optCtrl=list(maxfun=2e4)))
+summary(m3)
+Anova(m3, type=3)
+
+# residual dianostics using DHARMa
+## Step 1: scaled residuals
+simOut_m3 <- simulateResiduals(fittedModel = m3, n = 1000)
+plot(simOut_m3) 
+testUniformity(simOut_m3) 
+testDispersion(simOut_m3)
+
+# plot scaled residuals over each predictor (make sure they are even)
+plotResiduals(plants_long_strain.nod$root,  simOut_m3$scaledResiduals)
+
+## Check for singularities in model
+tt <- getME(m3,"theta")
+ll <- getME(m3,"lower")
+min(tt[ll==0])
+# issue: plant, batch, tray do not explain var.
+
+# lsmeans
+require(emmeans)
+require(lattice)
+require(multcompView)
+
+# treat:half interaction
+SHT_nod.lsm <- emmeans(m3, ~ half | treat + strain)
+sum.SHT_nod.lsm <- summary(SHT_nod.lsm, type="response", infer= c(TRUE,TRUE), adjust = "bon")
+save(sum.SHT_nod.lsm, file = "./models_files/sum.SHT_nod.lsm.Rdata")
+(cld_SHT_nod.lsm <- cld(regrid(SHT_nod.lsm)))
+# sig. diff at all but control
+plot(cld_HT_nod.lsm)
+
+# Dunnett-style contrasts (compare to control)
+treat_con <- contrast(regrid(SHT_nod.lsm), method = "trt.vs.ctrl1")
+con.SHT_nod.lsm <- summary(treat_con)
+plot(treat_con)
+```
+
+## Whole-plant models
+
+### mS1a: Shoot biomass
+
+```{r mS1a_shoot}
+# model
+mS1a <- glmer(shoot ~ treat*line + 
+                       (1|batch/tray), 
+                     family=Gamma(link="sqrt"), 
+                   data=plants)
+plotresid(mS1a, shapiro = TRUE) # non-normal, no pattern
+summary(mS1a)
+Anova(mS1a, type=3)
+summary(glht(mS1a, mcp(line="Tukey"))) # post-hoc comparisons
+```
+
+### mS1b: Root biomass
+
+```{r mS1b_root}
+# model total root biomass
+mS1b <- glmer(tot_root ~ treat*line +
+               (1|batch/tray), 
+               family = Gamma(link="sqrt"),
+               data = plants)
+# check diagonstics
+plotresid(mS1b, shapiro = TRUE)
+summary(mS1b)
+Anova(mS1b, type=3)
+```
+
+### mS1c: Nodules
+
+```{r mS1c_nods}
+# model total nodule number
+plants$obs_effect <- 1:nrow(plants) # account for overdispersion
+mS1c <- glmer(tot_nod ~ treat*line +
+               (1|batch/tray) + 
+                 (1|obs_effect), 
+               family = poisson(link="sqrt"),
+               data = plants)
+# check diagonstics
+plotresid(mS1c, shapiro = TRUE)
+overdisp_fun(mS1c)
+summary(mS1c)
+Anova(mS1c, type=3)
+```
+
+### mS1d: Partner choice
+
+```{r mS1d_pc}
+# calculate whole-plant differences in preference
+plants$tot_1022 <- plants$high_1022 + plants$low_1022
+plants$pref <- (plants$tot_1022)/plants$tot_nod
+
+# model
+mS1d <- lmer(pref ~ treat*line + 
+                   (1|batch/tray), 
+                   data=plants)
+plotresid(mS1d, shapiro = TRUE)
+summary(mS1d)
+Anova(mS1d, type=3)
+```
