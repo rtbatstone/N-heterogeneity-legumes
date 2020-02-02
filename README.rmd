@@ -26,3 +26,26 @@ Although shoot biomass was unaffected by N-heterogeneity, plant lines adjusted t
 In response to N-heterogeneity, *M. truncatula* exhibited phenotypic plasticity in root proliferation, nodulation, and partner choice at the local half-root level. We suggest that plasticity in response to rhizosphere conditions makes legumes potentially resilient to changes in N-heterogeneity, particularly in a time of anthropogenic N deposition.
 
 ## Description of markdown (.md) files, relevant folders in parentheses:
+
+1. data_prep:
+    * import raw data (./raw_data/plant_info1.csv)
+    * clean up datasets and save as .Rdata files (./prepped_data/)
+  
+2. models (saved lsmean files in ./models_files/):
+    * Half root growth responses to N-hetergeneity
+    * Half root nodulation responses to N-hetergeneity
+    * Half root nodulation responses to N-hetergeneity, accounting for strain
+    * Whole-plant trait analyses
+    
+3. figures (saved in ./figures_files):
+    * Half root growth responses to N-hetergeneity (./figures_files/Fig_1)
+    * Half root nodulation responses to N-hetergeneity (./figures_files/Fig_2)
+    * Correlations btw root growth and nodulation (./figures_files/Fig_3)
+    * Partner choice (./figures_files/Fig_4)
+    * Whole-plant traits (./figures_files/Fig_S2)
+    
+4. reanalyses:
+    * Import data from previous split-root experiment of Batstone *et al.* (2017) (./reanalyses_files/)
+    * Models on traits in both rhizobia and fertilizer experiments
+    * Figure to summarize trait responses (./figures_files/Fig_S1)
+  

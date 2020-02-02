@@ -45,3 +45,27 @@ rhizosphere conditions makes legumes potentially resilient to changes in
 N-heterogeneity, particularly in a time of anthropogenic N deposition.
 
 ## Description of markdown (.md) files, relevant folders in parentheses:
+
+1.  data\_prep:
+      - import raw data (./raw\_data/plant\_info1.csv)
+      - clean up datasets and save as .Rdata files (./prepped\_data/)
+2.  models (saved lsmean files in ./models\_files/):
+      - Half root growth responses to N-hetergeneity
+      - Half root nodulation responses to N-hetergeneity
+      - Half root nodulation responses to N-hetergeneity, accounting for
+        strain
+      - Whole-plant trait analyses
+3.  figures (saved in ./figures\_files):
+      - Half root growth responses to N-hetergeneity
+        (./figures\_files/Fig\_1)
+      - Half root nodulation responses to N-hetergeneity
+        (./figures\_files/Fig\_2)
+      - Correlations btw root growth and nodulation
+        (./figures\_files/Fig\_3)
+      - Partner choice (./figures\_files/Fig\_4)
+      - Whole-plant traits (./figures\_files/Fig\_S2)
+4.  reanalyses:
+      - Import data from previous split-root experiment of Batstone *et
+        al.* (2017) (./reanalyses\_files/)
+      - Models on traits in both rhizobia and fertilizer experiments
+      - Figure to summarize trait responses (./figures\_files/Fig\_S1)
